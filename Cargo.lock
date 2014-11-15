@@ -1,0 +1,20 @@
+[root]
+name = "traq"
+version = "0.0.1"
+dependencies = [
+ "time 0.0.1 (git+https://github.com/rust-lang/time)",
+]
+
+[[package]]
+name = "gcc"
+version = "0.0.1"
+source = "git+https://github.com/alexcrichton/gcc-rs#f25b3ba9c40303781189cc137fb98fffe5b56de7"
+
+[[package]]
+name = "time"
+version = "0.0.1"
+source = "git+https://github.com/rust-lang/time#d6219df8537e74fa87eeb7d372681c276dc5f9ff"
+dependencies = [
+ "gcc 0.0.1 (git+https://github.com/alexcrichton/gcc-rs)",
+]
+
