@@ -1,137 +1,140 @@
-extern crate traq;
+#![feature(collections)]
+#![feature(convert)]
+
 extern crate time;
 extern crate getopts;
 
-use getopts::{optopt,optflag,getopts};
+use getopts::Options;
+use std::env;
 
 // use std::io::BufferedReader;
 // use std::io::File;
 use std::os;
 
-fn parse_date(matches: &getopts::Matches) -> (i32, i32, i32) {
+#[derive(Debug)]
+enum DateRequest {
+  Month { year: i32, month: i32 },
+  Day { year:i32, month:i32, day: i32 }
+}
+
+fn parse_date(cli_opts: &getopts::Matches) -> DateRequest {
+  match cli_opts.opt_str("d").and_then(|d| {
+      time::strptime(d.as_str(), "%Y-%m-%d").and_then(|t| {
+        Ok(DateRequest::Day{
+          year:  t.tm_year + 1900_i32,
+          month: t.tm_mon + 1,
+          day:   t.tm_mday,
+        })
+      }).ok()
+    }) {
+    Some(d) => return d,
+    None => (),
+  };
+
   let now = time::now();
 
   let mut year  = now.tm_year + 1900_i32;
   let mut month = now.tm_mon + 1;
-  let mut day   = now.tm_mday;
 
-  month = match matches.opt_str("m") {
-    Some(m) => {
-      match from_str(m.trim()) {
-        Some(m) => {
-          day = -1;
-          m
-        }
-        None    => { month }
-      }
+  cli_opts.opt_str("m").and_then(|m| {
+    m.parse::<i32>().and_then(|m|{
+      month = m;
+      Ok(m)
+    }).ok()
+  });
 
-    }
-    None => { month }
+  cli_opts.opt_str("y").and_then(|y|{
+    y.parse::<i32>().and_then(|y|{
+      year = y;
+      Ok(y)
+    }).ok()
+  });
+
+  time::strptime(format!("{}-{}-{}", year, month, 1).as_str(), "%Y-%m-%d").map_err(|_| {
+    year = now.tm_year + 1900_i32;
+    month = now.tm_mon + 1;
+  });
+
+  return DateRequest::Month{
+    year:  year,
+    month: month,
   };
-
-  year = match matches.opt_str("y") {
-    Some(y) => {
-      match from_str(y.trim()) {
-        Some(y) => { y }
-        None    => { year }
-      }
-    }
-    None => { year }
-  };
-
-  match matches.opt_str("d") {
-    Some(d) => {
-      match time::strptime(d.as_slice(), "%Y-%m-%d") {
-        Ok(t) => {
-          month = t.tm_mon + 1;
-          year  = t.tm_year + 1900_i32;
-          day   = t.tm_mday;
-        }
-        Err(_) => {}
-      }
-    }
-    None => {}
-  }
-  return (year, month, day);
 }
 
-fn project_path(project: &str, year: i32) -> String {
+fn project_path(project: &str, date: &DateRequest) -> String {
   let mut data_dir = String::from_str( env!("TRAQ_DATA_DIR") );
   data_dir.push_str("/");
   data_dir.push_str(project);
   data_dir.push_str("/");
-  data_dir.push_str(year.to_string().as_slice());
+  match *date {
+    DateRequest::Month{ year: y, month:_} => {
+      data_dir.push_str(y.to_string().as_str());
+    }
+    DateRequest::Day{ year:y, month:_, day:_} => {
+      data_dir.push_str(y.to_string().as_str());
+    }
+  }
   return data_dir;
 }
 
-fn evaluate(project: &str, year: i32, month: i32, day: i32, running: bool) {
+fn evaluate(project: &str, date: &DateRequest, running: bool) {
 
 }
 
-fn print_month(project: &str, year: i32, month: i32) {
-
-}
-
-fn print_date(project: &str, year: i32, month: i32, day: i32) {
-
+fn print_date(project: &str, date: &DateRequest) {
+  match *date {
+    DateRequest::Month{ year: y, month: m} => {
+      println!("month!");
+    }
+    DateRequest::Day{ year:y, month:m, day: d} => {
+      println!("day!");
+    }
+  }
 }
 
 #[cfg(not(test))]
 fn main() {
-  let args: Vec<String> = os::args();
-  // let program = args[0].clone();
+  let args: Vec<String> = env::args().collect();
 
-  let opts = [
-    optopt("m",  "", "print tracked times for a given month"   , "MONTH"),
-    optopt("y",  "", "print tracked times for a given year"    , "YEAR"),
-    optopt("p",  "timestamps", "print data for a given project", "PROJECT"),
-    optopt("d",  ""          , "print tracked times for a given date", "DATE"),
-    optflag("e", "evaluate"  , "evaluate times by tag"),
-    optflag("r", "running"   , "include active tags in evaluation"),
-  ];
+  let mut opts = Options::new();
+  opts.optopt("m",  "", "print tracked times for a given month"   , "MONTH");
+  opts.optopt("y",  "", "print tracked times for a given year"    , "YEAR");
+  opts.optopt("p",  "timestamps", "print data for a given project", "PROJECT");
+  opts.optopt("d",  ""          , "print tracked times for a given date", "DATE");
+  opts.optflag("e", "evaluate"  , "evaluate times by tag");
+  opts.optflag("r", "running"   , "include active tags in evaluation");
 
-  let matches: getopts::Matches = match getopts(args.tail(), opts) {
-    Ok(m)  => { m }
-    Err(f) => { panic!(f.to_string()) }
+  let cli_opts = match opts.parse(&args[1..]) {
+      Ok(m) => { m }
+      Err(f) => { panic!(f.to_string()) }
   };
 
-  let project_match = matches.opt_str("p");
-  let project = match project_match {
-    Some(ref project) => { project.as_slice() }
-    None              => { "timestamps" }
-  };
+  let project = cli_opts.opt_str("p").unwrap_or( String::from_str( "timestamps" ) );
 
-  let (year, month, day) = parse_date(&matches);
+  let date = parse_date(&cli_opts);
 
-  if matches.opt_present("e") {
-    let running_evaluation = matches.opt_present("r");
-    evaluate( project, year, month, day, running_evaluation );
+  if cli_opts.opt_present("e") {
+    let running_evaluation = cli_opts.opt_present("r");
+    evaluate( project.as_str(), &date, running_evaluation );
   } else {
-
-    let command = if matches.free.len() > 0 {
-      matches.free[0].as_slice()
+    let command = if cli_opts.free.len() > 0 {
+      cli_opts.free[0].as_str()
     } else {
       ""
     };
 
     if command == "" {
-      println!("print!")
-      if day == -1 {
-        println!("month!")
-        print_month( project, year, month );
-      } else {
-        println!("day!")
-        print_date( project, year, month, day );
-      }
+      println!("print!");
+      print_date( project.as_str(), &date);
     } else {
-      println!("store! {}", command)
+      println!("store! {}", command);
     }
   }
 
   println!("Hello World!");
   println!("project: {}", project);
-  println!("project: {}", project_path(project, year));
-  println!("y/m/d: {}/{}/{}", year, month, day);
+  println!("project: {}", project_path(project.as_str(), &date));
+  println!("y/m/d: {:?}", date);
 
   // let path = Path::new("src/lib.rs");
   // let mut file = BufferedReader::new(File::open(&path));
