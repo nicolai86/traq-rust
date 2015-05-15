@@ -2,14 +2,18 @@
 #![feature(convert)]
 
 extern crate time;
-extern crate getopts;
 
-use getopts::Options;
 use std::env;
 
-// use std::io::BufferedReader;
-// use std::io::File;
-use std::os;
+
+extern crate getopts;
+use getopts::Options;
+
+extern crate glob;
+use std::io::{ BufRead, BufReader };
+use std::fs::File;
+use std::path::Path;
+use glob::glob;
 
 #[derive(Debug)]
 enum DateRequest {
@@ -81,13 +85,23 @@ fn evaluate(project: &str, date: &DateRequest, running: bool) {
 
 }
 
+fn print_file(path: &Path) {
+  let mut file = BufReader::new(File::open(&path).unwrap());
+  for line in file.lines() {
+    print!("{}\n", line.unwrap());
+  }
+  print!("%%\n")
+}
+
 fn print_date(project: &str, date: &DateRequest) {
   match *date {
     DateRequest::Month{ year: y, month: m} => {
-      println!("month!");
+      for entry in glob(format!("{}/{}-{:02}-*", project_path(project, &date).as_str(), y, m).as_str()).unwrap().filter_map(Result::ok) {
+        print_file(entry.as_path());
+      }
     }
     DateRequest::Day{ year:y, month:m, day: d} => {
-      println!("day!");
+      print_file(Path::new(format!("{}/{}-{:02}-{:02}", project_path(project, &date).as_str(), y, m, d).as_str()))
     }
   }
 }
@@ -124,19 +138,9 @@ fn main() {
     };
 
     if command == "" {
-      println!("print!");
       print_date( project.as_str(), &date);
     } else {
       println!("store! {}", command);
     }
   }
-
-  println!("Hello World!");
-  println!("project: {}", project);
-  println!("project: {}", project_path(project.as_str(), &date));
-  println!("y/m/d: {:?}", date);
-
-  // let path = Path::new("src/lib.rs");
-  // let mut file = BufferedReader::new(File::open(&path));
-  // let lines: Vec<String> = file.lines().map(|x| x.unwrap()).collect();
 }
